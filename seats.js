@@ -17,7 +17,30 @@
   }
 
   const rowLabel = (n) => { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
-  const seatName = (r, c) => `${rowLabel(r)}${c}`;
+  /* Phân tích sơ đồ: ô nào là ghế, tên ghế (hàng chỉ tính các hàng có ghế, số ghế bỏ qua lối đi) */
+  const layoutCache = new WeakMap();
+  function layoutOf(map) {
+    if (layoutCache.has(map)) return layoutCache.get(map);
+    const blocked = new Set((map.blocked || []).map((b) => b[0] + ',' + b[1]));
+    const covered = new Set();
+    for (const z of map.labels || []) for (let r = z.r; r < z.r + z.h; r++) for (let c = z.c; c < z.c + z.w; c++) covered.add(r + ',' + c);
+    const names = new Map(), num = new Map(), rowL = new Map();
+    let ri = 0, seats = 0;
+    for (let r = 1; r <= map.rows; r++) {
+      let n = 0;
+      for (let c = 1; c <= map.cols; c++) {
+        const k = r + ',' + c;
+        if (blocked.has(k) || covered.has(k)) continue;
+        if (!n) { ri++; rowL.set(r, rowLabel(ri)); }
+        n++; seats++;
+        names.set(k, rowL.get(r) + n); num.set(k, n);
+      }
+    }
+    const L = { blocked, covered, names, num, rowL, seats };
+    layoutCache.set(map, L);
+    return L;
+  }
+  const seatName = (map, r, c) => layoutOf(map).names.get(r + ',' + c) || `${rowLabel(r)}${c}`;
   const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const normCode = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const showCode = (c) => { const n = normCode(c); return n.length === 8 ? n.slice(0, 4) + '-' + n.slice(4) : n; };
@@ -61,33 +84,43 @@
   }
 
   /* Vẽ sơ đồ.
-     opts.host = true : bấm được mọi ghế (quản lý), hiện chữ viết tắt tên
+     opts.host = true : bấm được mọi ô (quản lý), hiện chữ viết tắt tên, hiện ô lối đi mờ
      opts.onSeat(r, c, state, info) với state: free | taken | blocked | mine */
   function render(el, map, opts = {}) {
+    const L = layoutOf(map);
     const taken = new Map(map.taken.map((t) => [t[0] + ',' + t[1], t]));
-    const blocked = new Set(map.blocked.map((b) => b[0] + ',' + b[1]));
     const mine = map.mine ? map.mine[0] + ',' + map.mine[1] : null;
     const canChange = map.open && map.allow_change !== false;
     const canPick = map.open && (!map.mine || canChange);
     const lw = window.innerWidth <= 640 ? 16 : 24;
     el.style.gridTemplateColumns = `${lw}px repeat(${map.cols}, var(--s)) ${lw}px`;
-    const parts = ['<span class="lab row"></span>'];
-    for (let c = 1; c <= map.cols; c++) parts.push(`<span class="lab">${c}</span>`);
-    parts.push('<span class="lab row"></span>');
+    el.style.gridTemplateRows = `repeat(${map.rows}, var(--s))`;
+    const parts = [];
     for (let r = 1; r <= map.rows; r++) {
-      const L = rowLabel(r);
-      parts.push(`<span class="lab row">${L}</span>`);
-      for (let c = 1; c <= map.cols; c++) {
-        const k = r + ',' + c, name = L + c, t = taken.get(k);
-        let cls = '', title = `${name} · Trống`, dis = !opts.host && !canPick, txt = c;
-        if (k === mine) { cls = 'm'; title = `${name} · Chỗ của bạn${canChange ? ' (bấm để huỷ)' : ''}`; dis = !canChange; txt = '✓'; }
-        else if (t) {
-          cls = 't'; title = `${name} · Đã có người${t[2] ? ': ' + t[2] : ''}`; dis = !opts.host;
-          txt = opts.host ? esc((t[2] || '?').trim().split(/\s+/).pop().slice(0, 2)) : '';
-        } else if (blocked.has(k)) { cls = 'b'; title = `${name} · Không sử dụng`; dis = !opts.host; txt = ''; }
-        parts.push(`<button class="seat ${cls}" data-r="${r}" data-c="${c}" title="${esc(title)}" aria-label="${esc(title)}" ${dis ? 'disabled' : ''}>${txt}</button>`);
+      const RL = L.rowL.get(r);
+      if (RL) {
+        parts.push(`<span class="lab" style="grid-area:${r}/1">${RL}</span><span class="lab" style="grid-area:${r}/${map.cols + 2}">${RL}</span>`);
       }
-      parts.push(`<span class="lab row">${L}</span>`);
+      for (let c = 1; c <= map.cols; c++) {
+        const k = r + ',' + c;
+        if (L.covered.has(k)) continue;
+        const pos = `style="grid-area:${r}/${c + 1}" data-r="${r}" data-c="${c}"`;
+        if (L.blocked.has(k)) {
+          if (opts.host) parts.push(`<button class="seat b" ${pos} title="Lối đi (bấm để thành ghế)"></button>`);
+          continue;
+        }
+        const name = L.names.get(k), t = taken.get(k);
+        let cls = '', title = `Ghế ${name} · Trống`, dis = !opts.host && !canPick, txt = L.num.get(k);
+        if (k === mine) { cls = 'm'; title = `Ghế ${name} · Chỗ của bạn${canChange ? ' (bấm để huỷ)' : ''}`; dis = !canChange; txt = '✓'; }
+        else if (t) {
+          cls = 't'; title = `Ghế ${name} · Đã có người${t[2] ? ': ' + t[2] : ''}`; dis = !opts.host;
+          txt = opts.host ? esc((t[2] || '?').trim().split(/\s+/).pop().slice(0, 2)) : '';
+        }
+        parts.push(`<button class="seat ${cls}" ${pos} title="${esc(title)}" aria-label="${esc(title)}" ${dis ? 'disabled' : ''}>${txt}</button>`);
+      }
+    }
+    for (const z of map.labels || []) {
+      parts.push(`<div class="zone k-${esc(z.k || 'info')}" style="grid-area:${z.r}/${z.c + 1}/span ${z.h}/span ${z.w}" title="${esc(z.t)}"><span>${esc(z.t)}</span></div>`);
     }
     el.innerHTML = parts.join('');
     el.classList.toggle('host', !!opts.host);
@@ -95,11 +128,10 @@
       const b = e.target.closest('.seat');
       if (!b || b.disabled || !opts.onSeat) return;
       const r = +b.dataset.r, c = +b.dataset.c, k = r + ',' + c;
-      const state = k === mine ? 'mine' : taken.has(k) ? 'taken' : blocked.has(k) ? 'blocked' : 'free';
+      const state = k === mine ? 'mine' : taken.has(k) ? 'taken' : L.blocked.has(k) ? 'blocked' : 'free';
       opts.onSeat(r, c, state, taken.get(k));
     };
-    const total = map.rows * map.cols - map.blocked.length;
-    return { total, taken: map.taken.length, free: total - map.taken.length };
+    return { total: L.seats, taken: map.taken.length, free: L.seats - map.taken.length };
   }
 
   // Cỡ ghế vừa bề ngang; trên điện thoại tối thiểu 22px cho dễ bấm (vuốt ngang để xem hết)
@@ -145,8 +177,8 @@
       [q('Kết thúc'), q(fmtDT(room.ended_at || new Date()))].join(','),
       [q('Số người'), q(rows.length)].join(','),
       '',
-      ['STT', 'Ghế', 'Hàng', 'Cột', 'Họ tên', 'Thời gian chọn'].map(q).join(','),
-      ...rows.map((t, i) => [i + 1, seatName(t[0], t[1]), rowLabel(t[0]), t[1], t[2], fmtDT(t[3])].map(q).join(',')),
+      ['STT', 'Ghế', 'Họ tên', 'Thời gian chọn'].map(q).join(','),
+      ...rows.map((t, i) => [i + 1, seatName(room, t[0], t[1]), t[2], fmtDT(t[3])].map(q).join(',')),
     ];
     return '﻿' + lines.join('\r\n');
   }
@@ -173,5 +205,5 @@
     return 'downloaded';
   }
 
-  window.Seats = { ok, client, call, rowLabel, seatName, esc, normCode, showCode, toast, errCode, errText, isOffline, render, fit, store, deviceToken, fmtDT, fmtLeft, saveFile };
+  window.Seats = { ok, client, call, rowLabel, seatName, layoutOf, esc, normCode, showCode, toast, errCode, errText, isOffline, render, fit, store, deviceToken, fmtDT, fmtLeft, saveFile };
 })();

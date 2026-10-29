@@ -1,5 +1,5 @@
 /* Máy chủ dữ liệu. Chỉ dùng publishable key. */
 window.SEAT_CONFIG = {
-  url: 'https://ovulzpqvhxcotukbpvhs.supabase.co',
-  key: 'sb_publishable_wI-sdZfF9knwVC6dx94XhA_HHqpmxE0'
+  url: 'https://egmbzipfixacufzvfyba.supabase.co',
+  key: 'sb_publishable_41wSFG3WNbMin4mDFTZuzw_bxY7H3zs'
 };

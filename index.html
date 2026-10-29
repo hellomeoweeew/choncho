@@ -57,13 +57,12 @@
 
     <!-- ========== TẠO PHÒNG ========== -->
     <section class="view" id="v-create" hidden>
-      <form class="card narrow" id="createForm">
+      <form class="card" id="createForm">
         <h2>Tạo phòng mới</h2>
         <label class="f">Tên buổi<input name="title" maxlength="120" required placeholder="VD: Lễ tri ân 12A1" /></label>
         <label class="f">Ghi chú (giờ, địa điểm…)<textarea name="note" rows="2" maxlength="1000" placeholder="Hội trường B · 8h00 thứ Bảy"></textarea></label>
-        <div class="row2">
-          <label class="f">Số hàng (1–60)<input name="rows" type="number" min="1" max="60" value="25" required /></label>
-          <label class="f">Số cột (1–60)<input name="cols" type="number" min="1" max="60" value="25" required /></label>
+        <div class="f">Bố trí sơ đồ
+          <div id="createLayout"></div>
         </div>
         <label class="f">Thời gian host
           <select name="minutes">
@@ -111,11 +110,11 @@
           <span class="stats" id="hStats"></span>
           <span class="grow"></span>
           <button class="btn sm" id="hToggle" type="button">Tạm khoá</button>
+          <button class="btn sm" id="hLayout" type="button">Bố trí</button>
           <button class="btn sm" id="hSettings" type="button">Cài đặt</button>
           <div class="zoom"><button class="btn sm" id="hOut" aria-label="Thu nhỏ">−</button><button class="btn sm" id="hIn" aria-label="Phóng to">+</button></div>
         </div>
-        <p class="note small">Bấm ghế: trống → <b>không dùng</b> (lối đi…) · không dùng → mở lại · có người → xem tên / <b>giải phóng</b></p>
-        <div class="stage">BẢNG / SÂN KHẤU</div>
+        <p class="note small">Bấm nhanh: ghế trống → <b>lối đi</b> · lối đi → ghế · ghế có người → xem tên / <b>giải phóng</b>. Muốn vẽ khối ghi chú, đổi kích thước: bấm <b>Bố trí</b>.</p>
         <div class="scroll" id="hScroll"><div class="grid" id="hGrid"></div></div>
       </div>
 
@@ -163,11 +162,10 @@
           <span class="who">Bạn: <b id="gName"></b> <button class="link" id="gRename" type="button">đổi tên</button></span>
         </div>
         <div class="legend">
-          <span><i></i>Trống</span><span><i class="t"></i>Đã có người</span><span><i class="m"></i>Chỗ của bạn</span><span><i class="b"></i>Không dùng</span>
+          <span><i></i>Trống</span><span><i class="t"></i>Đã có người</span><span><i class="m"></i>Chỗ của bạn</span><span><i class="z"></i>Khu vực / chỉ dẫn</span>
           <span class="grow"></span>
           <span class="zoom"><button class="btn sm" id="gOut" aria-label="Thu nhỏ">−</button><button class="btn sm" id="gIn" aria-label="Phóng to">+</button></span>
         </div>
-        <div class="stage">BẢNG / SÂN KHẤU</div>
         <div class="scroll" id="gScroll"><div class="grid" id="gGrid"></div></div>
         <p class="hint">Vuốt ngang để xem hết sơ đồ · bấm − để thu nhỏ</p>
       </div>
@@ -181,6 +179,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
   <script src="config.js"></script>
   <script src="seats.js"></script>
+  <script src="layout.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -30,9 +30,12 @@
   /* ---------- Hộp thoại ---------- */
   const dlg = $('dlg');
   let pending = null;
-  function settle(v) { const p = pending; pending = null; if (dlg.open) dlg.close(); if (p) p(v); }
-  function openDlg(html) {
+  function settle(v) { const p = pending; pending = null; if (dlg.open) dlg.close(); if (onDlgClose) { const f = onDlgClose; onDlgClose = null; f(); } if (p) p(v); }
+  let onDlgClose = null;
+  function openDlg(html, wide = false) {
     if (pending) { const p = pending; pending = null; p(false); }
+    if (onDlgClose) { const f = onDlgClose; onDlgClose = null; f(); }
+    dlg.classList.toggle('wide', wide);
     $('dlgBody').innerHTML = html;
     if (!dlg.open) dlg.showModal();
     $('dlgBody').querySelectorAll('[data-close]').forEach((b) => (b.onclick = () => settle(false)));
@@ -61,7 +64,11 @@
     clearTimers();
     if (dlg.open) settle(false);
     const [, page, arg] = (location.hash || '#/').split('/');
-    if (page === 'create') { show('create'); return; }
+    if (page === 'create') {
+      show('create');
+      if (!createEd) createEd = window.LayoutEditor($('createLayout'), window.LayoutEditor.defaults()); else createEd.redraw();
+      return;
+    }
     if (page === 'host' && arg) return openHost(normCode(arg));
     if (page === 'join' && arg) return openJoin(normCode(arg));
     renderHome();
@@ -116,19 +123,24 @@
   $('newRoomBtn').onclick = () => { location.hash = '#/create'; };
 
   /* ================= TẠO PHÒNG ================= */
+  let createEd = null;
   $('createForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.currentTarget;
-    const btn = f.querySelector('button.primary');
+    const btn = f.querySelector('button.primary:not([type=button])');
+    const L = createEd.get();
+    if (L.seats < 1) { $('createMsg').textContent = 'Sơ đồ chưa có ghế nào.'; return; }
     btn.disabled = true; $('createMsg').textContent = '';
     const { data, error } = await call(sb, 'seat_room_create', {
-      p_title: f.title.value, p_note: f.note.value, p_rows: +f.rows.value, p_cols: +f.cols.value,
+      p_title: f.title.value, p_note: f.note.value, p_rows: L.rows, p_cols: L.cols,
       p_minutes: +f.minutes.value, p_allow_change: f.allow_change.checked, p_show_names: f.show_names.checked,
+      p_blocked: L.blocked, p_labels: L.labels,
     });
     btn.disabled = false;
     if (error) { $('createMsg').textContent = errText(error); return; }
     setHosted([{ code: data.code, key: data.host_key, title: data.title, expires_at: data.expires_at }, ...hosted()]);
     f.reset();
+    createEd.destroy(); createEd = null; $('createLayout').innerHTML = '';
     location.hash = '#/host/' + data.code;
     setTimeout(() => showQr(), 400);
   });
@@ -183,7 +195,7 @@
   function drawHostList() {
     const q = $('hQ').value.trim().toLowerCase();
     const rows = H.room.taken.filter((t) => !q || (t[2] || '').toLowerCase().includes(q));
-    $('hList').innerHTML = rows.map((t) => `<tr><td><b>${seatName(t[0], t[1])}</b></td><td>${esc(t[2])}</td><td class="small">${fmtDT(t[3])}</td>
+    $('hList').innerHTML = rows.map((t) => `<tr><td><b>${seatName(H.room, t[0], t[1])}</b></td><td>${esc(t[2])}</td><td class="small">${fmtDT(t[3])}</td>
       <td style="text-align:right"><button class="btn sm danger" data-free="${t[0]},${t[1]}">Giải phóng</button></td></tr>`).join('')
       || '<tr><td colspan="4" class="note">Chưa có ai chọn.</td></tr>';
   }
@@ -200,20 +212,20 @@
 
   async function hostSeat(r, c, state, info) {
     if (state === 'taken') {
-      if (await ask(`Ghế ${seatName(r, c)}`, `<b>${esc(info[2])}</b><br/>Chọn lúc ${fmtDT(info[3])}`, 'Giải phóng ghế', true)) hostFree(r, c, true);
+      if (await ask(`Ghế ${seatName(H.room, r, c)}`, `<b>${esc(info[2])}</b><br/>Chọn lúc ${fmtDT(info[3])}`, 'Giải phóng ghế', true)) hostFree(r, c, true);
       return;
     }
     const { data, error } = await call(sb, 'seat_room_host_block', { p_code: H.code, p_key: H.key, p_row: r, p_col: c });
     if (error) return toast(errText(error), true);
-    toast(`${seatName(r, c)}: ${data ? 'không dùng' : 'đã mở lại'}`);
+    toast(data ? 'Đã đổi thành lối đi' : 'Đã đổi thành ghế');
     loadHost();
   }
 
   async function hostFree(r, c, confirmed) {
-    if (!confirmed && !(await ask(`Giải phóng ghế ${seatName(r, c)}?`, 'Người đã chọn sẽ mất chỗ.', 'Giải phóng', true))) return;
+    if (!confirmed && !(await ask(`Giải phóng ghế ${seatName(H.room, r, c)}?`, 'Người đã chọn sẽ mất chỗ.', 'Giải phóng', true))) return;
     const { error } = await call(sb, 'seat_room_host_free', { p_code: H.code, p_key: H.key, p_row: r, p_col: c });
     if (error) return toast(errText(error), true);
-    toast('Đã giải phóng ' + seatName(r, c));
+    toast('Đã giải phóng ' + seatName(H.room, r, c));
     loadHost();
   }
 
@@ -238,8 +250,6 @@
       <form id="setForm">
         <label class="f">Tên buổi<input name="title" maxlength="120" required value="${esc(r.title)}"/></label>
         <label class="f">Ghi chú<textarea name="note" rows="2" maxlength="1000">${esc(r.note)}</textarea></label>
-        <div class="row2"><label class="f">Số hàng<input name="rows" type="number" min="1" max="60" value="${r.rows}" required/></label>
-        <label class="f">Số cột<input name="cols" type="number" min="1" max="60" value="${r.cols}" required/></label></div>
         <label class="f check"><input type="checkbox" name="allow_change" ${r.allow_change ? 'checked' : ''}/> Cho tự đổi / huỷ chỗ</label>
         <label class="f check"><input type="checkbox" name="show_names" ${r.show_names ? 'checked' : ''}/> Cho mọi người thấy tên</label>
         <div class="acts"><button type="button" class="btn" data-close>Huỷ</button><button class="btn primary">Lưu</button></div>
@@ -247,9 +257,27 @@
     body.querySelector('#setForm').onsubmit = async (e) => {
       e.preventDefault();
       const f = e.currentTarget;
-      const ok = await hostUpdate({ p_title: f.title.value, p_note: f.note.value, p_rows: +f.rows.value, p_cols: +f.cols.value,
+      const ok = await hostUpdate({ p_title: f.title.value, p_note: f.note.value,
         p_allow_change: f.allow_change.checked, p_show_names: f.show_names.checked });
       if (ok) { settle(false); toast('Đã lưu'); }
+    };
+  };
+  $('hLayout').onclick = () => {
+    const r = H.room;
+    const body = openDlg(`<h2>Bố trí sơ đồ</h2>
+      <p class="note small">Ghế đang có người hiện màu xám, không tô đè được. Tên ghế được đánh lại theo sơ đồ mới.</p>
+      <div id="hLe"></div><p class="msg" id="hLeMsg"></p>
+      <div class="acts"><button type="button" class="btn" data-close>Huỷ</button><button type="button" class="btn primary" id="hLeSave">Lưu bố trí</button></div>`, true);
+    const ed = window.LayoutEditor(body.querySelector('#hLe'), {
+      rows: r.rows, cols: r.cols, blocked: r.blocked, labels: r.labels || [], locked: r.taken.map((t) => [t[0], t[1]]),
+    });
+    onDlgClose = () => ed.destroy();
+    body.querySelector('#hLeSave').onclick = async () => {
+      const L = ed.get();
+      if (L.seats < 1) { $('hLeMsg').textContent = 'Sơ đồ chưa có ghế nào.'; return; }
+      const { data, error } = await call(sb, 'seat_room_host_layout', { p_code: H.code, p_key: H.key, p_rows: L.rows, p_cols: L.cols, p_blocked: L.blocked, p_labels: L.labels });
+      if (error) { $('hLeMsg').textContent = errText(error); return; }
+      H.room = data; settle(false); drawHost(); toast('Đã lưu bố trí');
     };
   };
   $('hCopy').onclick = async () => {
@@ -390,7 +418,7 @@
     const can = r.open && r.allow_change !== false;
     if (r.mine) {
       $('gMine').hidden = false; $('gMine').className = 'banner';
-      $('gMine').innerHTML = `Bạn đã chọn ghế <b>${seatName(r.mine[0], r.mine[1])}</b> — ${esc(r.mine[2])}.`
+      $('gMine').innerHTML = `Bạn đã chọn ghế <b>${seatName(r, r.mine[0], r.mine[1])}</b> — ${esc(r.mine[2])}.`
         + (can ? ' Muốn đổi thì bấm vào ghế trống khác. <button class="btn sm danger" id="gCancel" type="button">Huỷ chỗ</button>' : '');
       if (can) $('gCancel').onclick = cancelSeat;
     } else if (!r.open) {
@@ -412,8 +440,8 @@
     const room = G.room;
     if (!room.open || busy) return;
     const moving = !!room.mine;
-    const ok = await ask(moving ? `Chuyển sang ghế ${seatName(r, c)}?` : `Chọn ghế ${seatName(r, c)}?`,
-      moving ? `Ghế cũ <b>${seatName(room.mine[0], room.mine[1])}</b> sẽ được nhả cho người khác. Nếu ghế mới vừa có người lấy trước, bạn vẫn giữ ghế cũ.`
+    const ok = await ask(moving ? `Chuyển sang ghế ${seatName(G.room, r, c)}?` : `Chọn ghế ${seatName(G.room, r, c)}?`,
+      moving ? `Ghế cũ <b>${seatName(room, room.mine[0], room.mine[1])}</b> sẽ được nhả cho người khác. Nếu ghế mới vừa có người lấy trước, bạn vẫn giữ ghế cũ.`
         : `Tên: <b>${esc(G.name)}</b>${room.allow_change === false ? '<br/>Phòng này <b>không cho đổi chỗ</b> sau khi chọn.' : ''}`,
       moving ? 'Đổi chỗ' : 'Chọn ghế này');
     if (!ok) return;
@@ -421,14 +449,14 @@
     const { error } = await call(sb, 'seat_room_take', { p_code: G.code, p_row: r, p_col: c, p_name: G.name, p_token: token });
     busy = false;
     if (error) { toast(errText(error), true); if (errCode(error) === 'NO_ROOM') return roomGone(); return loadGuest(false); }
-    toast(moving ? `Đã chuyển sang ghế ${seatName(r, c)}` : `Đã giữ ghế ${seatName(r, c)}`);
+    toast(moving ? `Đã chuyển sang ghế ${seatName(G.room, r, c)}` : `Đã giữ ghế ${seatName(G.room, r, c)}`);
     loadGuest(false);
   }
 
   async function cancelSeat() {
     const m = G.room.mine;
     if (!m || busy) return;
-    if (!(await ask(`Huỷ ghế ${seatName(m[0], m[1])}?`, 'Ghế sẽ trống cho người khác chọn.', 'Huỷ chỗ', true))) return;
+    if (!(await ask(`Huỷ ghế ${seatName(G.room, m[0], m[1])}?`, 'Ghế sẽ trống cho người khác chọn.', 'Huỷ chỗ', true))) return;
     busy = true;
     const { error } = await call(sb, 'seat_room_cancel', { p_code: G.code, p_token: token });
     busy = false;
