@@ -8,9 +8,10 @@
     ['stage', 'Tím'], ['info', 'Xanh'], ['green', 'Lục'], ['warn', 'Cam'], ['gray', 'Xám'],
   ];
   const SUGGEST = ['SÂN KHẤU', 'BẢNG', 'CỬA RA VÀO', 'LỐI THOÁT HIỂM', 'WC', 'Bàn tiếp tân', 'Khu khách mời', 'Khu giáo viên', 'Lối đi'];
+  const touchDev = matchMedia('(pointer: coarse)').matches;
+  const AREA = touchDev ? '<b>giữ ngón tay ~½ giây rồi kéo</b>' : '<b>chuột phải + kéo</b> (hoặc Shift + kéo)';
   const TIPS = {
-    seat: 'Bấm hoặc kéo qua các ô để biến thành <b>ghế</b>.',
-    aisle: 'Bấm hoặc kéo qua các ô để biến thành <b>lối đi</b> (ô trống, không ai chọn được).',
+    toggle: `Bấm 1 ô: <b>ghế ⇄ lối đi</b>. Kéo qua nhiều ô: tô theo ô đầu tiên. Tô cả vùng A×B: ${AREA}.`,
     zone: 'Kéo một hình chữ nhật để tạo <b>khối ghi chú</b> (sân khấu, cửa, WC…). Bấm vào khối có sẵn để sửa / xoá.',
     move: 'Chế độ xem: vuốt để cuộn sơ đồ, không tô gì.',
   };
@@ -22,8 +23,8 @@
       labels: (init.labels || []).map((z) => ({ ...z })),
       locked: new Set((init.locked || []).map((b) => b[0] + ',' + b[1])),   // ghế đang có người (không tô được)
     };
-    let tool = 'seat', zoom = 1;
-    const touch = matchMedia('(pointer: coarse)').matches;
+    let tool = 'toggle', zoom = 1;
+    const touch = touchDev;
     if (touch) tool = 'move';
 
     root.innerHTML = `<div class="le">
@@ -35,8 +36,7 @@
         <span class="zoom"><button type="button" class="btn sm" data-zout aria-label="Thu nhỏ">−</button><button type="button" class="btn sm" data-zin aria-label="Phóng to">+</button></span>
       </div>
       <div class="le-tools" role="tablist">
-        <button type="button" class="tool" data-tool="seat">🪑 Ghế</button>
-        <button type="button" class="tool" data-tool="aisle">⬚ Lối đi</button>
+        <button type="button" class="tool" data-tool="toggle">🪑 Ghế ⇄ lối đi</button>
         <button type="button" class="tool" data-tool="zone">▭ Khối ghi chú</button>
         <button type="button" class="tool" data-tool="move">✋ Xem / cuộn</button>
       </div>
@@ -49,6 +49,7 @@
         <button type="button" class="btn sm" data-p="nozone">Xoá mọi khối</button>
       </div>
       <p class="note small le-tip" data-tip></p>
+      <div class="le-legend"><span><i class="s"></i>Ghế</span><span><i class="a"></i>Lối đi / trống</span>${(init.locked || []).length ? '<span><i class="l"></i>Đang có người</span>' : ''}</div>
       <div class="le-scroll" data-scroll><div class="le-grid" data-grid></div></div>
     </div>`;
     const $ = (s) => root.querySelector(s);
@@ -112,63 +113,94 @@
     }
 
     // ---------- Tô bằng chuột / ngón tay ----------
-    let drag = null;
+    // drag.kind: 'paint' (kéo tô từng ô) | 'area' (tô cả vùng A×B) | 'zone' (vẽ khối ghi chú)
+    let drag = null, holdTimer = null;
     const cellAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest && el.closest('.le-grid .cell'); };
-    function paintOne(el) {
+    const isSeat = (el) => el.classList.contains('seat');
+    function setCell(el, target) {
       if (!el || el.classList.contains('lock')) return;
       const k = key(+el.dataset.r, +el.dataset.c);
-      if (tool === 'seat') { st.blocked.delete(k); el.className = 'cell seat'; }
+      if (target === 'seat') { st.blocked.delete(k); el.className = 'cell seat'; }
       else { st.blocked.add(k); el.className = 'cell aisle'; }
     }
     // Tô cả các ô nằm giữa 2 lần di chuyển (kéo nhanh không bị sót ô)
     function paint(el) {
       if (!el) return;
       const r = +el.dataset.r, c = +el.dataset.c;
-      const last = drag && drag.last;
+      const last = drag.last;
       if (last && (Math.abs(last.r - r) > 1 || Math.abs(last.c - c) > 1)) {
         const n = Math.max(Math.abs(last.r - r), Math.abs(last.c - c));
         for (let i = 1; i < n; i++) {
           const rr = Math.round(last.r + (r - last.r) * i / n), cc = Math.round(last.c + (c - last.c) * i / n);
-          paintOne(grid.querySelector(`.cell[data-r="${rr}"][data-c="${cc}"]`));
+          setCell(grid.querySelector(`.cell[data-r="${rr}"][data-c="${cc}"]`), drag.target);
         }
       }
-      paintOne(el);
-      if (drag) drag.last = { r, c };
+      setCell(el, drag.target);
+      drag.last = { r, c };
     }
-    function showPrev(a, b) {
+    function showPrev(a, b, label) {
       const p = grid.querySelector('[data-prev]');
       const r1 = Math.min(a.r, b.r), r2 = Math.max(a.r, b.r), c1 = Math.min(a.c, b.c), c2 = Math.max(a.c, b.c);
+      const rect = { r: r1, c: c1, h: r2 - r1 + 1, w: c2 - c1 + 1 };
       p.hidden = false;
-      p.style.gridArea = `${r1}/${c1}/span ${r2 - r1 + 1}/span ${c2 - c1 + 1}`;
-      return { r: r1, c: c1, h: r2 - r1 + 1, w: c2 - c1 + 1 };
+      p.className = 'zone preview' + (label ? ' area-' + label : '');
+      p.style.gridArea = `${r1}/${c1}/span ${rect.h}/span ${rect.w}`;
+      p.innerHTML = `<span>${rect.h} × ${rect.w}${label ? (label === 'seat' ? ' · ghế' : ' · lối đi') : ''}</span>`;
+      return rect;
     }
+    function startArea(d) { d.kind = 'area'; d.rect = showPrev(d.a, d.a, d.target); }
+    grid.addEventListener('contextmenu', (e) => e.preventDefault());
     grid.addEventListener('pointerdown', (e) => {
-      if (tool === 'move') return;
+      const areaKey = e.button === 2 || e.shiftKey;
+      if (tool === 'move' && !areaKey) return;
       const z = e.target.closest('.zone:not(.preview)');
-      if (z) { e.preventDefault(); editZone(+z.dataset.z); return; }
+      if (z) { if (e.button === 0) { e.preventDefault(); editZone(+z.dataset.z); } return; }
       const el = e.target.closest('.cell');
       if (!el) return;
       e.preventDefault();
-      if (tool === 'zone') { const a = { r: +el.dataset.r, c: +el.dataset.c }; drag = { a, rect: showPrev(a, a) }; }
-      else { drag = { paint: true, last: null }; paint(el); }
+      const a = { r: +el.dataset.r, c: +el.dataset.c };
+      if (tool === 'zone') { drag = { kind: 'zone', a, rect: showPrev(a, a) }; return; }
+      // Trạng thái mới = ngược với ô đầu tiên chạm vào
+      const target = isSeat(el) || el.classList.contains('lock') ? 'aisle' : 'seat';
+      drag = { kind: 'paint', a, target, last: null };
+      if (areaKey) { startArea(drag); return; }
+      paint(el);
+      // Điện thoại: giữ yên ~½ giây thì chuyển sang tô vùng
+      if (e.pointerType === 'touch') {
+        clearTimeout(holdTimer);
+        holdTimer = setTimeout(() => { if (drag && drag.kind === 'paint' && drag.last && drag.last.r === a.r && drag.last.c === a.c) { startArea(drag); if (navigator.vibrate) navigator.vibrate(15); } }, 450);
+      }
     });
     window.addEventListener('pointermove', (e) => {
       if (!drag) return;
       const el = cellAt(e.clientX, e.clientY);
-      if (drag.paint) paint(el);
-      else if (el) drag.rect = showPrev(drag.a, { r: +el.dataset.r, c: +el.dataset.c });
+      if (!el) return;
+      const b = { r: +el.dataset.r, c: +el.dataset.c };
+      if (drag.kind === 'paint') { if (b.r !== drag.a.r || b.c !== drag.a.c) clearTimeout(holdTimer); paint(el); }
+      else drag.rect = showPrev(drag.a, b, drag.kind === 'area' ? drag.target : '');
     });
     window.addEventListener('pointerup', () => {
+      clearTimeout(holdTimer);
       if (!drag) return;
       const d = drag; drag = null;
-      if (d.paint) { updateCount(); return; }
+      if (d.kind === 'paint') { updateCount(); return; }
       grid.querySelector('[data-prev]').hidden = true;
+      const R = d.rect;
+      if (d.kind === 'area') {
+        for (let r = R.r; r < R.r + R.h; r++) for (let c = R.c; c < R.c + R.w; c++) {
+          const k = key(r, c);
+          if (st.locked.has(k)) continue;
+          if (d.target === 'seat') st.blocked.delete(k); else st.blocked.add(k);
+        }
+        draw();
+        return;
+      }
       // khối mới không được đè ghế đang có người
       for (const k of st.locked) {
         const [r, c] = k.split(',').map(Number);
-        if (r >= d.rect.r && r < d.rect.r + d.rect.h && c >= d.rect.c && c < d.rect.c + d.rect.w) { alert('Khối không được đè lên ghế đang có người ngồi.'); return; }
+        if (r >= R.r && r < R.r + R.h && c >= R.c && c < R.c + R.w) { alert('Khối không được đè lên ghế đang có người ngồi.'); return; }
       }
-      editZone(-1, d.rect);
+      editZone(-1, R);
     });
 
     // ---------- Sửa / tạo khối ghi chú ----------

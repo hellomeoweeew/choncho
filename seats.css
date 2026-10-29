@@ -185,3 +185,31 @@ dialog.wide { width: min(1040px, calc(100% - 16px)); max-height: calc(100vh - 16
 .colors .sw.k-gray  { background: #f1f5f9; border-color: #cbd5e1; color: #334155; }
 .colors input:checked + .sw { outline: 3px solid var(--accent); outline-offset: 1px; }
 @media (max-width: 640px) { .tool { font-size: 12px; padding: 8px 2px; } }
+
+/* ---------- Tương phản cao: ghế (tô đậm) vs ô trống / lối đi (gần như trong suốt) ---------- */
+:root { --free-line: #7b8598; --seat-fill: #c9d6f2; --seat-edge: #3f5a8f; --aisle-edge: #d9dde4; }
+@media (prefers-color-scheme: dark) { :root { --free-line: #8a93a6; --seat-fill: #34466b; --seat-edge: #8fa8dc; --aisle-edge: #3a3f4a; } }
+.seat { border-width: 1.5px; color: #374151; font-weight: 600; }
+@media (prefers-color-scheme: dark) { .seat { color: #d6dbe4; } }
+.seat.b { border: 1px dashed var(--aisle-edge); opacity: 1; background: transparent; }
+.legend i { border-width: 1.5px; }
+/* Trình bố trí */
+.le-grid .cell.seat { background: var(--seat-fill); border: 1.5px solid var(--seat-edge); box-shadow: inset 0 -3px 0 rgba(0,0,0,.12); }
+.le-grid .cell.aisle { background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(127,127,127,.08) 3px 6px); border: 1px dashed var(--aisle-edge); }
+.le-grid .cell.lock { background: #6b7280; border: 1.5px solid #4b5563; }
+.le-grid .zone.preview { display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 13px; font-weight: 700; }
+.le-grid .zone.preview.area-seat { background: rgba(63, 90, 143, .28); border-color: var(--seat-edge); color: var(--seat-edge); }
+.le-grid .zone.preview.area-aisle { background: rgba(220, 38, 38, .12); border-color: #dc2626; color: #b91c1c; }
+.le-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--dim); margin: 6px 0 0; }
+.le-legend i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+.le-legend .s { background: var(--seat-fill); border: 1.5px solid var(--seat-edge); }
+.le-legend .a { border: 1px dashed var(--aisle-edge); background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(127,127,127,.12) 3px 6px); }
+.le-legend .l { background: #6b7280; }
+/* ghế trống trên sơ đồ chọn chỗ: nền xanh nhạt + viền đậm (khác hẳn lối đi để trống) */
+:root { --seat-free: #e6edfb; }
+@media (prefers-color-scheme: dark) { :root { --seat-free: #26324a; } }
+.seat { background: var(--seat-free); border-color: var(--seat-edge); }
+.seat.t { background: var(--taken); border-color: #6b7280; }
+.seat.m { background: var(--mine); border-color: #15803d; }
+.seat.b { background: transparent; }
+.legend i { background: var(--seat-free); border-color: var(--seat-edge); }
