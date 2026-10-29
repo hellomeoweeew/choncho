@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chọn chỗ</title>
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="seats.css" />
+</head>
+<body>
+  <div class="wrap">
+    <nav class="topnav">
+      <button class="btn sm ghost" id="backBtn" type="button" hidden>← Về đầu</button>
+    </nav>
+    <div class="offline" id="offline" hidden>Mất kết nối mạng — sẽ tự cập nhật khi có mạng.</div>
+
+    <!-- ========== TRANG ĐẦU ========== -->
+    <section class="view" id="v-home" hidden>
+      <header class="hero">
+        <img src="icon.svg" alt="" width="56" height="56" />
+        <div><h1>Chọn chỗ</h1><p class="note">Tham gia bằng mã phòng, hoặc tạo phòng mới.</p></div>
+      </header>
+
+      <div class="two">
+        <form class="card" id="joinForm">
+          <h2>Tham gia</h2>
+          <p class="note">Nhập mã phòng host gửi cho bạn.</p>
+          <label class="f">Mã phòng
+            <input name="code" class="code-input" required autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="11" placeholder="XXXX-XXXX" inputmode="text" />
+          </label>
+          <button class="btn primary wide">Vào phòng</button>
+          <p class="msg" id="joinMsg"></p>
+        </form>
+
+        <div class="card">
+          <h2>Tạo phòng (host)</h2>
+          <p class="note">Tạo sơ đồ ghế, nhận mã gửi cho mọi người. Kết thúc thì danh sách được tải về máy bạn và xoá khỏi máy chủ.</p>
+          <button class="btn wide" id="newRoomBtn" type="button">+ Tạo phòng mới</button>
+        </div>
+      </div>
+
+      <div class="card" id="hostedBox" hidden>
+        <h2>Phòng bạn đang host</h2>
+        <div class="list" id="hostedList"></div>
+      </div>
+      <div class="card" id="joinedBox" hidden>
+        <h2>Phòng đã tham gia</h2>
+        <div class="list" id="joinedList"></div>
+      </div>
+      <div class="card" id="historyBox" hidden>
+        <h2>Đã kết thúc · lưu trên máy này</h2>
+        <div class="list" id="historyList"></div>
+      </div>
+    </section>
+
+    <!-- ========== TẠO PHÒNG ========== -->
+    <section class="view" id="v-create" hidden>
+      <form class="card narrow" id="createForm">
+        <h2>Tạo phòng mới</h2>
+        <label class="f">Tên buổi<input name="title" maxlength="120" required placeholder="VD: Lễ tri ân 12A1" /></label>
+        <label class="f">Ghi chú (giờ, địa điểm…)<textarea name="note" rows="2" maxlength="1000" placeholder="Hội trường B · 8h00 thứ Bảy"></textarea></label>
+        <div class="row2">
+          <label class="f">Số hàng (1–60)<input name="rows" type="number" min="1" max="60" value="25" required /></label>
+          <label class="f">Số cột (1–60)<input name="cols" type="number" min="1" max="60" value="25" required /></label>
+        </div>
+        <label class="f">Thời gian host
+          <select name="minutes">
+            <option value="30">30 phút</option>
+            <option value="60" selected>1 giờ</option>
+            <option value="120">2 giờ</option>
+            <option value="240">4 giờ</option>
+            <option value="720">12 giờ</option>
+            <option value="1440">1 ngày</option>
+            <option value="4320">3 ngày</option>
+            <option value="10080">7 ngày</option>
+          </select>
+        </label>
+        <label class="f check"><input type="checkbox" name="allow_change" checked /> Cho người tham gia tự đổi / huỷ chỗ</label>
+        <label class="f check"><input type="checkbox" name="show_names" /> Cho mọi người thấy tên ai ngồi đâu</label>
+        <button class="btn primary wide">Tạo phòng</button>
+        <p class="msg" id="createMsg"></p>
+      </form>
+    </section>
+
+    <!-- ========== HOST ========== -->
+    <section class="view" id="v-host" hidden>
+      <div class="card host-head">
+        <div class="grow">
+          <p class="kicker">BẠN ĐANG HOST</p>
+          <h1 id="hTitle">…</h1>
+          <p class="note" id="hNote"></p>
+        </div>
+        <div class="code-box">
+          <span class="kicker">MÃ PHÒNG</span>
+          <b id="hCode">----</b>
+          <div class="acts tight">
+            <button class="btn sm" id="hCopy" type="button">Copy mã</button>
+            <button class="btn sm" id="hShare" type="button">Gửi link</button>
+            <button class="btn sm" id="hQr" type="button">QR</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="bar">
+          <span class="pill" id="hStatus"></span>
+          <span class="timer" id="hTimer">--:--</span>
+          <button class="btn sm" id="hAdd" type="button">+30 phút</button>
+          <span class="stats" id="hStats"></span>
+          <span class="grow"></span>
+          <button class="btn sm" id="hToggle" type="button">Tạm khoá</button>
+          <button class="btn sm" id="hSettings" type="button">Cài đặt</button>
+          <div class="zoom"><button class="btn sm" id="hOut" aria-label="Thu nhỏ">−</button><button class="btn sm" id="hIn" aria-label="Phóng to">+</button></div>
+        </div>
+        <p class="note small">Bấm ghế: trống → <b>không dùng</b> (lối đi…) · không dùng → mở lại · có người → xem tên / <b>giải phóng</b></p>
+        <div class="stage">BẢNG / SÂN KHẤU</div>
+        <div class="scroll" id="hScroll"><div class="grid" id="hGrid"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="bar"><h2 style="margin:0">Danh sách</h2><span class="grow"></span><input class="search" id="hQ" placeholder="Tìm tên…" /></div>
+        <div class="list-wrap"><table><thead><tr><th>Ghế</th><th>Họ tên</th><th>Lúc chọn</th><th></th></tr></thead><tbody id="hList"></tbody></table></div>
+      </div>
+
+      <div class="card end-card">
+        <div>
+          <b>Kết thúc phòng</b>
+          <p class="note small">Tải danh sách về máy này (file .csv mở bằng Excel), rồi <b>xoá phòng khỏi máy chủ</b>. Hết giờ app cũng tự làm việc này.</p>
+        </div>
+        <button class="btn danger" id="hEnd" type="button">Kết thúc &amp; tải về</button>
+      </div>
+    </section>
+
+    <!-- ========== GUEST: NHẬP TÊN ========== -->
+    <section class="view" id="v-name" hidden>
+      <form class="card narrow" id="nameForm">
+        <p class="kicker" id="nCode">PHÒNG</p>
+        <h2 id="nTitle">…</h2>
+        <p class="note" id="nNote"></p>
+        <label class="f">Họ và tên của bạn
+          <input name="name" required minlength="2" maxlength="60" autocomplete="name" placeholder="Nguyễn Văn A" />
+        </label>
+        <button class="btn primary wide">Tiếp tục chọn ghế →</button>
+      </form>
+    </section>
+
+    <!-- ========== GUEST: CHỌN GHẾ ========== -->
+    <section class="view" id="v-guest" hidden>
+      <header class="top">
+        <p class="kicker" id="gCode">PHÒNG</p>
+        <h1 id="gTitle">…</h1>
+        <p class="note" id="gNote"></p>
+      </header>
+      <div class="banner" id="gMine" hidden></div>
+      <div class="card">
+        <div class="bar">
+          <span class="pill" id="gStatus">Đang tải…</span>
+          <span class="timer" id="gTimer"></span>
+          <span class="stats" id="gStats"></span>
+          <span class="grow"></span>
+          <span class="who">Bạn: <b id="gName"></b> <button class="link" id="gRename" type="button">đổi tên</button></span>
+        </div>
+        <div class="legend">
+          <span><i></i>Trống</span><span><i class="t"></i>Đã có người</span><span><i class="m"></i>Chỗ của bạn</span><span><i class="b"></i>Không dùng</span>
+          <span class="grow"></span>
+          <span class="zoom"><button class="btn sm" id="gOut" aria-label="Thu nhỏ">−</button><button class="btn sm" id="gIn" aria-label="Phóng to">+</button></span>
+        </div>
+        <div class="stage">BẢNG / SÂN KHẤU</div>
+        <div class="scroll" id="gScroll"><div class="grid" id="gGrid"></div></div>
+        <p class="hint">Vuốt ngang để xem hết sơ đồ · bấm − để thu nhỏ</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- Hộp thoại dùng chung -->
+  <dialog id="dlg"><div id="dlgBody"></div></dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+  <script src="config.js"></script>
+  <script src="seats.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
