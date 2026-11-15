@@ -100,14 +100,17 @@
     BAD_TOKEN: 'Trình duyệt không hỗ trợ. Hãy thử trình duyệt khác.',
   };
   function errCode(e) { const m = e?.message || String(e); return Object.keys(ERR).find((k) => m.includes(k)) || null; }
-  function isOffline(e) { return /Failed to fetch|NetworkError|Load failed|network|abort|timed? ?out|ERR_/i.test((e?.name || '') + ' ' + (e?.message || String(e))); }
+  function isOffline(e) { return /Failed to fetch|fetch failed|NetworkError|Load failed|network|abort|timed? ?out|ERR_/i.test((e?.name || '') + ' ' + (e?.message || String(e))); }
   function errText(e) {
     const k = errCode(e);
     if (k) return ERR[k];
     const m = e?.message || String(e);
     const out = m.match(/SEATS_OUTSIDE:(\d+)/);
     if (out) return `Còn ${out[1]} ghế đã có người nằm ngoài kích thước mới. Hãy giải phóng các ghế đó trước.`;
-    if (isOffline(e)) return 'Không có mạng. Kiểm tra kết nối rồi thử lại.';
+    if (isOffline(e)) {
+      if (navigator.onLine === false) return 'Máy đang mất mạng. Kiểm tra Wi-Fi / 4G rồi thử lại.';
+      return 'Không kết nối được máy chủ dữ liệu (mạng vẫn có). Có thể máy chủ Supabase đang tạm dừng, hoặc mạng trường chặn supabase.co. Thử lại sau ít phút, hoặc thử bằng 4G.';
+    }
     if (/Could not find the function|does not exist/i.test(m)) return 'Máy chủ chưa được cài đặt.';
     return m;
   }
