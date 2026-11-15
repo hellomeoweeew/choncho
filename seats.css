@@ -213,3 +213,10 @@ dialog.wide { width: min(1040px, calc(100% - 16px)); max-height: calc(100vh - 16
 .seat.m { background: var(--mine); border-color: #15803d; }
 .seat.b { background: transparent; }
 .legend i { background: var(--seat-free); border-color: var(--seat-edge); }
+
+/* ---------- Phòng đã kết thúc · xuất file ---------- */
+.ended-card { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; border-color: var(--accent); background: var(--accent-soft); }
+.ended-card .acts { margin-top: 0; }
+.exp { display: grid; gap: 10px; margin-top: 12px; }
+.exp .btn { flex-direction: column; align-items: flex-start; text-align: left; white-space: normal; padding: 12px 14px; font-size: 15px; gap: 2px; }
+.exp .btn small { font-weight: 400; font-size: 12.5px; opacity: .85; }
